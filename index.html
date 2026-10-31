@@ -141,7 +141,7 @@ input:focus, select:focus { outline: none; border-bottom-color: var(--fg); }
     <p class="sub">Entrée le 16 janvier 2027 · Linton &amp; Pauline</p>
   </header>
 
-  <form class="gate" id="gate" autocomplete="off">
+  <form class="gate" id="gate" autocomplete="off" hidden>
     <p>Entre le code secret pour ouvrir la liste. Il est demandé une seule fois sur cet appareil.</p>
     <div class="field"><label for="g-code">Code</label><input id="g-code" class="num" autocapitalize="characters" required></div>
     <div class="actions"><button class="btn" type="submit" id="g-submit">Ouvrir</button><span class="status" id="g-status"></span></div>
@@ -192,7 +192,6 @@ input:focus, select:focus { outline: none; border-bottom-color: var(--fg); }
         <span class="status" id="form-status"></span>
       </div>
     </form>
-    <button type="button" class="linkbtn" id="logout">Oublier le code sur cet appareil</button>
   </div>
 </div>
 <script src="app.js"></script>

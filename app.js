@@ -3,6 +3,7 @@
   var API = "https://gdenkygewitokuihvjrs.supabase.co/rest/v1/rpc/";
   var KEY = "sb_publishable_l3LP8JGPSRGADQ-ZZXaynA_6VP2QccH";
   var STORE_KEY = "ameublement-gilly-code";
+  var ACCESS_CODE = "3RJAZ5BE";
   var CATS = ["Salon", "Cuisine", "Chambre", "Salle de bain", "Électroménager", "Divers"];
   var fmt = new Intl.NumberFormat("fr-BE", { style: "currency", currency: "EUR" });
   var state = { budget: null, items: [], code: null };
@@ -118,7 +119,6 @@
       applyState(await rpc("app_state", { p_code: state.code }));
       $("status").textContent = "";
     } catch (e) {
-      if (e.code === "invalid_code") { lock("Le code n'est plus valide. Entre le nouveau code."); return; }
       if (!quiet) $("status").textContent = "La liste n'a pas pu être chargée. Vérifie ta connexion.";
     }
   }
@@ -142,7 +142,6 @@
   }
 
   function writeError(e) {
-    if (e.code === "invalid_code") { lock("Le code n'est plus valide. Entre le nouveau code."); return; }
     $("form-status").textContent = e.code === "full" ? "La liste est pleine : retire des articles avant d'en ajouter." : "L'enregistrement a échoué. Réessaie dans un instant.";
   }
 
@@ -214,8 +213,7 @@
       clearInterval(pollTimer);
       pollTimer = setInterval(function () { if (!document.hidden) refresh(true); }, 15000);
     } catch (e) {
-      if (e.code === "invalid_code") lock(fromGate ? "Code incorrect." : "");
-      else { $("gate").hidden = false; $("g-status").textContent = "Impossible de joindre la liste. Vérifie ta connexion."; }
+      $("app").hidden = false; $("status").textContent = "Impossible de charger la liste. Vérifie ta connexion et recharge la page.";
     }
     $("g-submit").disabled = false;
   }
@@ -225,9 +223,8 @@
     var code = $("g-code").value.trim().toUpperCase();
     if (code) unlock(code, true);
   });
-  $("logout").addEventListener("click", function () { lock(""); });
   document.addEventListener("visibilitychange", function () { if (!document.hidden && state.code) refresh(true); });
 
-  var saved = store(true);
-  if (saved) { $("gate").hidden = true; unlock(saved, false); } else { $("g-code").focus(); }
+  // Accès direct, sans code à taper : la page utilise le code d'accès de la base automatiquement.
+  unlock(ACCESS_CODE, false);
 })();
