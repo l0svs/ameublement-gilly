@@ -82,6 +82,9 @@ h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; margin: 0; text
 .del { border: 0; background: none; color: var(--faint); font: inherit; font-size: 13px; cursor: pointer; padding: 4px 0; min-width: 64px; text-align: right; }
 .del:hover, .del:focus-visible { color: var(--fg); }
 .del.armed { color: var(--fg); font-weight: 600; }
+.acts { display: flex; gap: 16px; justify-content: flex-end; }
+.acts .del { min-width: 0; }
+.edit { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 12px; padding: 12px 0 4px 36px; }
 .tag { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
 
 .empty { color: var(--muted); padding: 24px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
@@ -124,7 +127,9 @@ input:focus, select:focus { outline: none; border-bottom-color: var(--fg); }
   .stat:nth-child(n+3) { border-top: 1px solid var(--line); }
   .fields { grid-template-columns: minmax(0, 1fr); }
   .row { grid-template-columns: 24px minmax(0, 1fr) auto; }
-  .row .del { grid-column: 2 / -1; text-align: left; min-width: 0; }
+  .row .acts { grid-column: 2 / -1; justify-content: flex-start; }
+  .edit { padding-left: 0; }
+  .edit .fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (prefers-reduced-motion: no-preference) {
   .bar span { transition: width .3s ease; }
@@ -208,7 +213,7 @@ input:focus, select:focus { outline: none; border-bottom-color: var(--fg); }
   var CATS = ["Salon", "Cuisine", "Chambre", "Salle de bain", "Électroménager", "Divers"];
   var fmt = new Intl.NumberFormat("fr-BE", { style: "currency", currency: "EUR" });
   var state = { budget: null, items: [], code: null };
-  var armedId = null, armTimer = null, pollTimer = null;
+  var armedId = null, armTimer = null, pollTimer = null, editing = null;
 
   function $(id) { return document.getElementById(id); }
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
@@ -299,10 +304,16 @@ input:focus, select:focus { outline: none; border-bottom-color: var(--fg); }
         if (u) { var a = el("a", null, host(u)); a.href = u; a.target = "_blank"; a.rel = "noopener noreferrer"; meta.appendChild(a); }
         mid.appendChild(meta); row.appendChild(mid);
         row.appendChild(el("div", "price num", money(it.total)));
+        var acts = el("div", "acts");
+        var ed = el("button", "del", "Modifier"); ed.type = "button";
+        ed.addEventListener("click", function () { startEdit(it); });
+        acts.appendChild(ed);
         var del = el("button", "del", armedId === it.id ? "Confirmer" : "Retirer"); del.type = "button";
         if (armedId === it.id) del.classList.add("armed");
         del.addEventListener("click", function () { remove(it); });
-        row.appendChild(del);
+        acts.appendChild(del);
+        row.appendChild(acts);
+        if (editing && editing.id === it.id) row.appendChild(buildEditor(it));
         g.appendChild(row);
       });
       wrap.appendChild(g);
@@ -310,7 +321,70 @@ input:focus, select:focus { outline: none; border-bottom-color: var(--fg); }
     list.appendChild(wrap);
   }
 
-  function render() { renderSummary(); renderList(); }
+  function render() {
+    if (editing && !state.items.some(function (i) { return i.id === editing.id; })) editing = null;
+    renderSummary();
+    // pendant qu'on tape dans l'éditeur, le rafraîchissement automatique ne reconstruit pas la liste
+    var a = document.activeElement;
+    if (!(editing && a && a.closest && a.closest(".edit"))) renderList();
+  }
+
+  /* ---------- edit price / quantity ---------- */
+  function startEdit(it) {
+    editing = { id: it.id, price: String(it.price).replace(".", ","), qty: String(it.qty), msg: "" };
+    renderList();
+    var p = $("e-price"); if (p) { p.focus(); p.select(); }
+  }
+  function stopEdit() { editing = null; renderList(); renderSummary(); }
+  function buildEditor(it) {
+    var box = el("div", "edit");
+    var f1 = el("div", "field"), l1 = el("label", null, "Prix unitaire (€)"), i1 = el("input", "num");
+    l1.htmlFor = "e-price"; i1.id = "e-price"; i1.inputMode = "decimal"; i1.value = editing.price;
+    f1.appendChild(l1); f1.appendChild(i1);
+    var f2 = el("div", "field"), l2 = el("label", null, "Quantité"), i2 = el("input", "num");
+    l2.htmlFor = "e-qty"; i2.id = "e-qty"; i2.type = "number"; i2.inputMode = "numeric"; i2.min = "1"; i2.max = "999"; i2.step = "1"; i2.value = editing.qty;
+    f2.appendChild(l2); f2.appendChild(i2);
+    var tot = el("p", "line-total", "Total : "), tv = el("span", "num"); tot.appendChild(tv);
+    var msg = el("p", "status", editing.msg || "");
+    var bar = el("div", "actions");
+    var save = el("button", "btn", "Enregistrer"); save.type = "button";
+    var cancel = el("button", "btn btn-ghost", "Annuler"); cancel.type = "button";
+    bar.appendChild(save); bar.appendChild(cancel);
+    function upd() {
+      editing.price = i1.value; editing.qty = i2.value;
+      var p = parsePrice(i1.value), q = parseQty(i2.value);
+      tv.textContent = (isNaN(p) || isNaN(q)) ? "—" : (q > 1 ? q + " × " + money(p) + " = " : "") + money(Math.round(p * q * 100) / 100);
+    }
+    async function doSave() {
+      var p = parsePrice(i1.value), q = parseQty(i2.value);
+      if (isNaN(p)) { msg.textContent = "Le prix doit être un nombre, par exemple 149,99."; return; }
+      if (isNaN(q)) { msg.textContent = "La quantité doit être un nombre entier entre 1 et 999."; return; }
+      save.disabled = cancel.disabled = true; msg.textContent = "";
+      try {
+        await rpc("app_update_item", { p_code: state.code, p_id: it.id, p_price: p, p_qty: q });
+        editing = null;
+        await refresh();
+        renderList();
+      } catch (e) {
+        save.disabled = cancel.disabled = false;
+        msg.textContent = "L'enregistrement a échoué. Réessaie dans un instant.";
+      }
+    }
+    i1.addEventListener("input", upd); i2.addEventListener("input", upd);
+    [i1, i2].forEach(function (i) {
+      i.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") { e.preventDefault(); doSave(); }
+        if (e.key === "Escape") stopEdit();
+      });
+    });
+    save.addEventListener("click", doSave);
+    cancel.addEventListener("click", stopEdit);
+    var fields = el("div", "fields");
+    fields.appendChild(f1); fields.appendChild(f2);
+    box.appendChild(fields); box.appendChild(tot); box.appendChild(bar); box.appendChild(msg);
+    upd();
+    return box;
+  }
 
   /* ---------- data ---------- */
   function applyState(data) {
