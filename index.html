@@ -93,6 +93,8 @@ form h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-s
 .fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
 .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .field.wide { grid-column: 1 / -1; }
+.line-total { margin: 0; font-size: 13px; color: var(--muted); }
+.line-total span { color: var(--fg); }
 label { font-size: 12px; color: var(--muted); }
 input, select {
   font: inherit;
@@ -172,7 +174,9 @@ input:focus, select:focus { outline: none; border-bottom-color: var(--fg); }
       <h2>Ajouter un achat</h2>
       <div class="fields">
         <div class="field wide"><label for="f-name">Article</label><input id="f-name" required placeholder="Meuble TV"></div>
-        <div class="field"><label for="f-price">Prix (€)</label><input id="f-price" class="num" inputmode="decimal" required placeholder="149,99"></div>
+        <div class="field"><label for="f-price">Prix unitaire (€)</label><input id="f-price" class="num" inputmode="decimal" required placeholder="149,99"></div>
+        <div class="field"><label for="f-qty">Quantité</label><input id="f-qty" class="num" type="number" inputmode="numeric" min="1" max="999" step="1" value="1" required></div>
+        <div class="field wide"><p class="line-total">Total de la ligne : <span id="f-total" class="num">—</span></p></div>
         <div class="field"><label for="f-store">Magasin</label><input id="f-store" placeholder="IKEA, Electro Dépôt…"></div>
         <div class="field"><label for="f-cat">Pièce</label>
           <select id="f-cat">
@@ -215,6 +219,16 @@ input:focus, select:focus { outline: none; border-bottom-color: var(--fg); }
     var n = Number(v);
     return isFinite(n) && n >= 0 && n < 1000000 ? Math.round(n * 100) / 100 : NaN;
   }
+  function parseQty(s) {
+    var v = String(s || "").trim();
+    if (!/^\d{1,3}$/.test(v)) return NaN;
+    var n = Number(v);
+    return n >= 1 && n <= 999 ? n : NaN;
+  }
+  function updateLineTotal() {
+    var p = parsePrice($("f-price").value), q = parseQty($("f-qty").value);
+    $("f-total").textContent = (isNaN(p) || isNaN(q)) ? "—" : (q > 1 ? q + " × " + money(p) + " = " : "") + money(Math.round(p * q * 100) / 100);
+  }
   function safeUrl(u) { try { var x = new URL(u); return (x.protocol === "https:" || x.protocol === "http:") ? x.href : null; } catch (e) { return null; } }
   function host(u) { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (e) { return "lien"; } }
   function store(get, val) {
@@ -241,7 +255,7 @@ input:focus, select:focus { outline: none; border-bottom-color: var(--fg); }
   /* ---------- rendering ---------- */
   function renderSummary() {
     var budget = Number(state.budget) || 0, done = 0, planned = 0;
-    state.items.forEach(function (it) { if (it.status === "done") done += it.price; else planned += it.price; });
+    state.items.forEach(function (it) { if (it.status === "done") done += it.total; else planned += it.total; });
     var left = budget - done - planned;
     $("v-budget").textContent = state.budget == null ? "—" : money(budget);
     $("v-done").textContent = money(done);
@@ -267,7 +281,7 @@ input:focus, select:focus { outline: none; border-bottom-color: var(--fg); }
       items.sort(function (a, b) { return (a.status === b.status ? 0 : a.status === "done" ? 1 : -1) || (a.createdAt - b.createdAt); });
       var g = el("div", "group"), head = el("div", "group-head");
       head.appendChild(el("h2", null, cat));
-      head.appendChild(el("span", "num", money(items.reduce(function (s, i) { return s + i.price; }, 0))));
+      head.appendChild(el("span", "num", money(items.reduce(function (s, i) { return s + i.total; }, 0))));
       g.appendChild(head);
       items.forEach(function (it) {
         var row = el("div", "row" + (it.status === "done" ? " done" : ""));
@@ -279,11 +293,12 @@ input:focus, select:focus { outline: none; border-bottom-color: var(--fg); }
         mid.appendChild(el("div", "name", it.name));
         var meta = el("div", "meta");
         meta.appendChild(el("span", "tag", it.status === "done" ? "Acheté" : "Prévu"));
+        meta.appendChild(el("span", "num", it.qty + " × " + money(it.price)));
         if (it.store) meta.appendChild(el("span", null, it.store));
         var u = it.link && safeUrl(it.link);
         if (u) { var a = el("a", null, host(u)); a.href = u; a.target = "_blank"; a.rel = "noopener noreferrer"; meta.appendChild(a); }
         mid.appendChild(meta); row.appendChild(mid);
-        row.appendChild(el("div", "price num", money(it.price)));
+        row.appendChild(el("div", "price num", money(it.total)));
         var del = el("button", "del", armedId === it.id ? "Confirmer" : "Retirer"); del.type = "button";
         if (armedId === it.id) del.classList.add("armed");
         del.addEventListener("click", function () { remove(it); });
@@ -301,8 +316,10 @@ input:focus, select:focus { outline: none; border-bottom-color: var(--fg); }
   function applyState(data) {
     state.budget = data && data.budget != null ? Number(data.budget) : null;
     state.items = ((data && data.items) || []).map(function (x) {
+      var unit = Number(x.price) || 0, qty = Math.max(1, Math.floor(Number(x.qty)) || 1);
       return {
-        id: String(x.id), name: String(x.name || "Sans nom"), price: Number(x.price) || 0,
+        id: String(x.id), name: String(x.name || "Sans nom"), price: unit, qty: qty,
+        total: Math.round(unit * qty * 100) / 100,
         store: x.store ? String(x.store) : "", category: x.category ? String(x.category) : "Divers",
         status: x.status === "done" ? "done" : "planned", link: x.link ? String(x.link) : "",
         createdAt: Date.parse(x.created_at) || 0
@@ -342,21 +359,26 @@ input:focus, select:focus { outline: none; border-bottom-color: var(--fg); }
     $("form-status").textContent = e.code === "full" ? "La liste est pleine : retire des articles avant d'en ajouter." : "L'enregistrement a échoué. Réessaie dans un instant.";
   }
 
+  $("f-price").addEventListener("input", updateLineTotal);
+  $("f-qty").addEventListener("input", updateLineTotal);
+
   $("add-form").addEventListener("submit", async function (ev) {
     ev.preventDefault();
-    var name = $("f-name").value.trim(), price = parsePrice($("f-price").value);
+    var name = $("f-name").value.trim(), price = parsePrice($("f-price").value), qty = parseQty($("f-qty").value);
     if (!name) { $("form-status").textContent = "Indique le nom de l'article."; return; }
     if (isNaN(price)) { $("form-status").textContent = "Le prix doit être un nombre, par exemple 149,99."; return; }
+    if (isNaN(qty)) { $("form-status").textContent = "La quantité doit être un nombre entier entre 1 et 999."; return; }
     var raw = $("f-link").value.trim(), link = raw ? safeUrl(raw) : "";
     if (raw && !link) { $("form-status").textContent = "Le lien doit commencer par https://"; return; }
     $("f-submit").disabled = true;
     try {
-      await rpc("app_add_item", {
-        p_code: state.code, p_name: name.slice(0, 120), p_price: price,
+      await rpc("app_add_item_qty", {
+        p_code: state.code, p_name: name.slice(0, 120), p_price: price, p_qty: qty,
         p_store: $("f-store").value.trim().slice(0, 60), p_category: $("f-cat").value,
         p_status: $("f-st-done").checked ? "done" : "planned", p_link: link || ""
       });
-      $("f-name").value = ""; $("f-price").value = ""; $("f-store").value = ""; $("f-link").value = "";
+      $("f-name").value = ""; $("f-price").value = ""; $("f-qty").value = "1"; $("f-store").value = ""; $("f-link").value = "";
+      updateLineTotal();
       $("f-st-planned").checked = true;
       $("form-status").textContent = "Ajouté.";
       setTimeout(function () { $("form-status").textContent = ""; }, 2500);
