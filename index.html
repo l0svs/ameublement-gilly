@@ -82,6 +82,10 @@ h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; margin: 0; text
 .del { border: 0; background: none; color: var(--faint); font: inherit; font-size: 13px; cursor: pointer; padding: 4px 0; min-width: 64px; text-align: right; }
 .del:hover, .del:focus-visible { color: var(--fg); }
 .del.armed { color: var(--fg); font-weight: 600; }
+.later-head { border-top: 1px solid var(--line); padding-top: 24px; display: flex; flex-direction: column; gap: 4px; }
+.later-head h2 { margin: 0; font-size: 15px; }
+.later-note { margin: 0; font-size: 13px; color: var(--muted); }
+.group.later .name, .group.later .price { color: var(--muted); }
 .acts { display: flex; gap: 16px; justify-content: flex-end; }
 .acts .del { min-width: 0; }
 .edit { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 12px; padding: 12px 0 4px 36px; }
@@ -145,7 +149,7 @@ input:focus, select:focus { outline: none; border-bottom-color: var(--fg); }
 <div class="wrap">
   <header>
     <h1>Ameublement — Chaussée de Ransart 222/101</h1>
-    <p class="sub">Entrée le 16 janvier 2027 · Linton &amp; Pauline</p>
+    <p class="sub">Entrée le 1er janvier 2027 · Linton &amp; Pauline</p>
   </header>
 
   <form class="gate" id="gate" autocomplete="off" hidden>
@@ -192,6 +196,7 @@ input:focus, select:focus { outline: none; border-bottom-color: var(--fg); }
           <div class="radios">
             <label><input type="radio" name="f-status" id="f-st-planned" value="planned" checked>Prévu</label>
             <label><input type="radio" name="f-status" id="f-st-done" value="done">Acheté</label>
+            <label><input type="radio" name="f-status" id="f-st-later" value="later">Plus tard</label>
           </div>
         </div>
         <div class="field wide"><label for="f-link">Lien (facultatif)</label><input id="f-link" type="url" inputmode="url" placeholder="https://"></div>
@@ -260,7 +265,8 @@ input:focus, select:focus { outline: none; border-bottom-color: var(--fg); }
   /* ---------- rendering ---------- */
   function renderSummary() {
     var budget = Number(state.budget) || 0, done = 0, planned = 0;
-    state.items.forEach(function (it) { if (it.status === "done") done += it.total; else planned += it.total; });
+    // les articles « plus tard » ne comptent pas dans le budget
+    state.items.forEach(function (it) { if (it.status === "done") done += it.total; else if (it.status === "planned") planned += it.total; });
     var left = budget - done - planned;
     $("v-budget").textContent = state.budget == null ? "—" : money(budget);
     $("v-done").textContent = money(done);
@@ -277,27 +283,46 @@ input:focus, select:focus { outline: none; border-bottom-color: var(--fg); }
   function renderList() {
     var list = $("list"); list.textContent = "";
     if (!state.items.length) { list.appendChild(el("p", "empty", "Aucun achat pour l'instant. Ajoute le premier avec le formulaire ci-dessous.")); return; }
-    var groups = {};
-    state.items.forEach(function (it) { (groups[it.category] = groups[it.category] || []).push(it); });
-    var order = CATS.concat(Object.keys(groups).filter(function (c) { return CATS.indexOf(c) < 0; }));
+    var active = state.items.filter(function (it) { return it.status !== "later"; });
+    var later = state.items.filter(function (it) { return it.status === "later"; });
     var wrap = el("div"); wrap.style.display = "flex"; wrap.style.flexDirection = "column"; wrap.style.gap = "28px";
+    if (!active.length) wrap.appendChild(el("p", "empty", "Aucun achat prévu dans le budget pour l'instant."));
+    var groups = {};
+    active.forEach(function (it) { (groups[it.category] = groups[it.category] || []).push(it); });
+    var order = CATS.concat(Object.keys(groups).filter(function (c) { return CATS.indexOf(c) < 0; }));
     order.forEach(function (cat) {
       var items = groups[cat]; if (!items) return;
       items.sort(function (a, b) { return (a.status === b.status ? 0 : a.status === "done" ? 1 : -1) || (a.createdAt - b.createdAt); });
-      var g = el("div", "group"), head = el("div", "group-head");
-      head.appendChild(el("h2", null, cat));
-      head.appendChild(el("span", "num", money(items.reduce(function (s, i) { return s + i.total; }, 0))));
-      g.appendChild(head);
-      items.forEach(function (it) {
+      wrap.appendChild(buildGroup(cat, items, false));
+    });
+    if (later.length) {
+      later.sort(function (a, b) { return a.createdAt - b.createdAt; });
+      var sep = el("div", "later-head");
+      sep.appendChild(el("h2", null, "À acheter plus tard"));
+      sep.appendChild(el("p", "later-note", "Hors budget : ces articles ne sont pas comptés dans le reste."));
+      wrap.appendChild(sep);
+      wrap.appendChild(buildGroup(null, later, true));
+    }
+    list.appendChild(wrap);
+  }
+
+  function buildGroup(cat, items, isLater) {
+    var g = el("div", "group" + (isLater ? " later" : ""));
+    var head = el("div", "group-head");
+    head.appendChild(el("h2", null, isLater ? (items.length + " article" + (items.length > 1 ? "s" : "")) : cat));
+    head.appendChild(el("span", "num", money(items.reduce(function (s, i) { return s + i.total; }, 0))));
+    g.appendChild(head);
+    items.forEach(function (it) {
         var row = el("div", "row" + (it.status === "done" ? " done" : ""));
         var cb = el("input", "check"); cb.type = "checkbox"; cb.id = "cb-" + it.id; cb.checked = it.status === "done";
         cb.setAttribute("aria-label", "Marquer « " + it.name + " » comme acheté");
-        cb.addEventListener("change", function () { toggle(it, cb); });
+        if (isLater) { cb.disabled = true; cb.style.visibility = "hidden"; }
+        else cb.addEventListener("change", function () { toggle(it, cb); });
         row.appendChild(cb);
         var mid = el("div"); mid.style.minWidth = "0";
         mid.appendChild(el("div", "name", it.name));
         var meta = el("div", "meta");
-        meta.appendChild(el("span", "tag", it.status === "done" ? "Acheté" : "Prévu"));
+        meta.appendChild(el("span", "tag", it.status === "done" ? "Acheté" : isLater ? it.category : "Prévu"));
         meta.appendChild(el("span", "num", it.qty + " × " + money(it.price)));
         if (it.store) meta.appendChild(el("span", null, it.store));
         var u = it.link && safeUrl(it.link);
@@ -308,6 +333,12 @@ input:focus, select:focus { outline: none; border-bottom-color: var(--fg); }
         var ed = el("button", "del", "Modifier"); ed.type = "button";
         ed.addEventListener("click", function () { startEdit(it); });
         acts.appendChild(ed);
+        if (it.status !== "done") {
+          var mv = el("button", "del", isLater ? "Au budget" : "Plus tard"); mv.type = "button";
+          mv.setAttribute("aria-label", isLater ? "Remettre « " + it.name + " » dans le budget" : "Reporter « " + it.name + " » à plus tard");
+          mv.addEventListener("click", function () { move(it, isLater ? "planned" : "later", mv); });
+          acts.appendChild(mv);
+        }
         var del = el("button", "del", armedId === it.id ? "Confirmer" : "Retirer"); del.type = "button";
         if (armedId === it.id) del.classList.add("armed");
         del.addEventListener("click", function () { remove(it); });
@@ -315,10 +346,14 @@ input:focus, select:focus { outline: none; border-bottom-color: var(--fg); }
         row.appendChild(acts);
         if (editing && editing.id === it.id) row.appendChild(buildEditor(it));
         g.appendChild(row);
-      });
-      wrap.appendChild(g);
     });
-    list.appendChild(wrap);
+    return g;
+  }
+
+  async function move(it, status, btn) {
+    btn.disabled = true;
+    try { await rpc("app_set_status", { p_code: state.code, p_id: it.id, p_status: status }); await refresh(); }
+    catch (e) { btn.disabled = false; writeError(e); }
   }
 
   function render() {
@@ -395,7 +430,7 @@ input:focus, select:focus { outline: none; border-bottom-color: var(--fg); }
         id: String(x.id), name: String(x.name || "Sans nom"), price: unit, qty: qty,
         total: Math.round(unit * qty * 100) / 100,
         store: x.store ? String(x.store) : "", category: x.category ? String(x.category) : "Divers",
-        status: x.status === "done" ? "done" : "planned", link: x.link ? String(x.link) : "",
+        status: x.status === "done" ? "done" : x.status === "later" ? "later" : "planned", link: x.link ? String(x.link) : "",
         createdAt: Date.parse(x.created_at) || 0
       };
     });
@@ -449,7 +484,7 @@ input:focus, select:focus { outline: none; border-bottom-color: var(--fg); }
       await rpc("app_add_item_qty", {
         p_code: state.code, p_name: name.slice(0, 120), p_price: price, p_qty: qty,
         p_store: $("f-store").value.trim().slice(0, 60), p_category: $("f-cat").value,
-        p_status: $("f-st-done").checked ? "done" : "planned", p_link: link || ""
+        p_status: $("f-st-done").checked ? "done" : $("f-st-later").checked ? "later" : "planned", p_link: link || ""
       });
       $("f-name").value = ""; $("f-price").value = ""; $("f-qty").value = "1"; $("f-store").value = ""; $("f-link").value = "";
       updateLineTotal();
