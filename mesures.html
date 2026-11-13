@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Mesures Gilly</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+html, body { margin: 0; }
+[hidden] { display: none !important; }
+
+/* Same ledger look as the purchases page: one column, monochrome on white. One block per room. */
+:root {
+  --bg: #ffffff;
+  --fg: #111111;
+  --muted: #6b6b6b;
+  --faint: #a3a3a3;
+  --line: #e6e6e6;
+  --soft: #f5f5f5;
+  --font: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+.wrap {
+  max-width: 720px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 40px 64px;
+  display: flex; flex-direction: column; gap: 32px;
+}
+header { display: flex; flex-direction: column; gap: 4px; }
+h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
+.sub { color: var(--muted); margin: 0; font-size: 14px; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+nav.tabs { display: flex; gap: 24px; border-bottom: 1px solid var(--line); margin-top: 16px; }
+nav.tabs a { color: var(--muted); text-decoration: none; padding: 8px 0; font-size: 14px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+nav.tabs a[aria-current="page"] { color: var(--fg); font-weight: 600; border-bottom-color: var(--fg); }
+
+details.howto { border-top: 1px solid var(--fg); border-bottom: 1px solid var(--line); padding: 12px 0; }
+details.howto summary { cursor: pointer; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
+details.howto ol { margin: 12px 0 4px; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+details.howto li span { color: var(--muted); }
+
+.overview { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--muted); }
+
+.room { display: flex; flex-direction: column; gap: 12px; }
+.room-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--fg); }
+.room-head h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; margin: 0; overflow-wrap: anywhere; }
+.room-head .area { font-size: 13px; color: var(--muted); white-space: nowrap; }
+.dims { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 16px; }
+.field { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+label, .lbl { font-size: 12px; color: var(--muted); }
+input {
+  font: inherit; color: var(--fg); background: var(--bg);
+  border: 0; border-bottom: 1px solid var(--line); border-radius: 0;
+  padding: 7px 0; width: 100%; min-width: 0;
+}
+input.num { font-family: var(--mono); }
+input:focus { outline: none; border-bottom-color: var(--fg); }
+input.bad { border-bottom-color: var(--fg); border-bottom-style: dashed; }
+input::placeholder { color: var(--faint); }
+
+.mlist { display: flex; flex-direction: column; }
+.m { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.m .m-label { font-weight: 500; }
+.m .m-dims { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 16px; }
+.m .m-note { grid-column: 1 / -1; }
+.m .m-note input { font-size: 14px; }
+.empty { color: var(--muted); font-size: 14px; padding: 12px 0; border-bottom: 1px solid var(--line); margin: 0; }
+
+.linkbtn { border: 0; background: none; padding: 4px 0; font: inherit; font-size: 13px; color: var(--muted); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.linkbtn:hover, .linkbtn:focus-visible { color: var(--fg); }
+.linkbtn.armed { color: var(--fg); font-weight: 600; }
+.room-actions { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; }
+.add-line { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: end; }
+.btn { font: inherit; font-weight: 500; background: var(--fg); color: var(--bg); border: 1px solid var(--fg); padding: 9px 18px; cursor: pointer; border-radius: 0; white-space: nowrap; }
+.btn-ghost { background: var(--bg); color: var(--fg); }
+.btn:disabled { opacity: 0.4; cursor: default; }
+.status { font-size: 13px; color: var(--muted); min-height: 20px; }
+.saved { font-size: 12px; color: var(--muted); min-height: 18px; }
+form.newroom { display: flex; flex-direction: column; gap: 12px; padding-top: 16px; border-top: 1px solid var(--fg); }
+form.newroom h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; margin: 0; }
+:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+
+@media (max-width: 560px) {
+  .dims { gap: 10px 12px; }
+  .m .m-dims { gap: 8px 12px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Mesures — Chaussée de Ransart 222/101</h1>
+    <p class="sub">Toutes les dimensions en centimètres · Linton &amp; Pauline</p>
+    <nav class="tabs" aria-label="Pages">
+      <a href="./">Achats</a>
+      <a href="./mesures.html" aria-current="page">Mesures</a>
+    </nav>
+  </header>
+
+  <details class="howto">
+    <summary>Comment mesurer</summary>
+    <ol>
+      <li>Tout en <strong>centimètres</strong>, au ras du sol, d'un mur à l'autre. <span>Les plinthes réduisent l'espace de 1 à 2 cm.</span></li>
+      <li>Pour chaque pièce : <strong>longueur, largeur, hauteur sous plafond</strong>. La surface se calcule toute seule.</li>
+      <li>Ensuite les éléments qui gênent un meuble : <strong>portes</strong> <span>(et leur sens d'ouverture)</span>, <strong>fenêtres</strong> <span>(et la hauteur du bas de la fenêtre par rapport au sol)</span>, <strong>radiateurs</strong>, <strong>prises</strong> et interrupteurs.</li>
+      <li>Les <strong>emplacements</strong> des gros meubles et appareils : lit, canapé, TV, armoire, machine à laver, frigo. Largeur × hauteur × profondeur.</li>
+      <li>Le <strong>passage</strong> pour les livraisons : porte d'entrée, couloir, escalier ou ascenseur.</li>
+      <li>Mesure deux fois ce qui compte, et prends une photo avec le mètre visible. <span>« Ajouter les mesures conseillées » crée la liste à remplir pour chaque pièce.</span></li>
+    </ol>
+  </details>
+
+  <div class="status" id="status" role="status"></div>
+  <div class="overview" id="overview" hidden></div>
+  <div id="rooms" style="display:flex;flex-direction:column;gap:40px"></div>
+
+  <form class="newroom" id="newroom" autocomplete="off" hidden>
+    <h2>Ajouter une pièce</h2>
+    <div class="add-line">
+      <div class="field"><label for="nr-name">Nom de la pièce</label><input id="nr-name" maxlength="40" placeholder="WC, bureau, cave…" required></div>
+      <button class="btn" type="submit" id="nr-submit">Ajouter</button>
+    </div>
+    <span class="status" id="nr-status"></span>
+  </form>
+</div>
+<script>
+(function () {
+  "use strict";
+  var API = "https://gdenkygewitokuihvjrs.supabase.co/rest/v1/rpc/";
+  var KEY = "sb_publishable_l3LP8JGPSRGADQ-ZZXaynA_6VP2QccH";
+  var CODE = "3RJAZ5BE";
+  var state = { rooms: [], measures: [] };
+  var armed = null, armTimer = null, pollTimer = null, loaded = false;
+
+  var CHECKLIST = {
+    common: ["Porte de la pièce (sens d'ouverture en note)", "Fenêtre 1 (hauteur du bas en note)", "Radiateur (position en note)", "Prises et interrupteurs (positions en note)"],
+    entree: ["Porte d'entrée de l'appartement (passage meubles)", "Couloir (largeur de passage)", "Mur pour porte-manteau / meuble à chaussures"],
+    salon: ["Mur TV", "Mur du canapé", "Prise TV / internet (position en note)", "Espace table"],
+    cuisine: ["Emplacement machine à laver", "Emplacement frigo / congélateur", "Plan de travail libre", "Espace sous l'évier", "Espace libre pour une table"],
+    chambre: ["Mur du lit", "Espace armoire", "Espace bureau / table de nuit"],
+    sdb: ["Espace pour un meuble de rangement", "Emplacement panier à linge / étendoir", "Emplacement machine à laver (si ici)"]
+  };
+
+  function $(id) { return document.getElementById(id); }
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function norm(s) { return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, ""); }
+  function parseCm(s) {
+    var v = String(s == null ? "" : s).replace(/\s/g, "").replace(/cm$/i, "").replace(",", ".");
+    if (v === "") return null;
+    var n = Number(v);
+    return isFinite(n) && n >= 0 && n < 100000 ? Math.round(n * 10) / 10 : NaN;
+  }
+  function showCm(n) { return n == null ? "" : String(Number(n)).replace(".", ","); }
+  function area(r) {
+    var l = r.length_cm == null ? null : Number(r.length_cm), w = r.width_cm == null ? null : Number(r.width_cm);
+    if (!l || !w) return null;
+    return Math.round(l * w / 1000) / 10; // cm² → m², 1 decimal
+  }
+  function fmtArea(a) { return a == null ? "" : "≈ " + String(a).replace(".", ",") + " m²"; }
+
+  async function rpc(fn, args) {
+    var res = await fetch(API + fn, { method: "POST", headers: { "apikey": KEY, "Content-Type": "application/json" }, body: JSON.stringify(args) });
+    var text = await res.text(), data = null;
+    try { data = text ? JSON.parse(text) : null; } catch (e) {}
+    if (!res.ok) { var err = new Error((data && data.message) || ("HTTP " + res.status)); err.full = /too_many_items/.test(err.message); throw err; }
+    return data;
+  }
+
+  function apply(data) {
+    state.rooms = (data && data.rooms) || [];
+    state.measures = (data && data.measures) || [];
+  }
+  function editingNow() { var a = document.activeElement; return !!(a && a.tagName === "INPUT" && $("rooms").contains(a)); }
+  async function refresh(quiet) {
+    try {
+      var data = await rpc("app_measures", { p_code: CODE });
+      if (quiet && editingNow()) return; // ne pas effacer une saisie en cours
+      apply(data); render(); loaded = true;
+      $("status").textContent = "";
+    } catch (e) {
+      if (!quiet || !loaded) $("status").textContent = "Les mesures n'ont pas pu être chargées. Vérifie ta connexion et recharge la page.";
+    }
+  }
+
+  function render() {
+    var box = $("rooms"); box.textContent = "";
+    var total = 0, filled = 0, count = 0;
+    state.rooms.forEach(function (r) { var a = area(r); if (a) total += a; });
+    state.measures.forEach(function (m) { count++; if (m.width_cm != null || m.height_cm != null || m.depth_cm != null) filled++; });
+    var ov = $("overview"); ov.hidden = false; ov.textContent = "";
+    ov.appendChild(el("span", null, state.rooms.length + " pièce" + (state.rooms.length > 1 ? "s" : "") + " · " + filled + " / " + count + " mesures remplies"));
+    ov.appendChild(el("span", "num", total ? "Surface ≈ " + String(Math.round(total * 10) / 10).replace(".", ",") + " m²" : ""));
+    if (!state.rooms.length) box.appendChild(el("p", "empty", "Aucune pièce. Ajoute la première avec le formulaire ci-dessous."));
+    state.rooms.forEach(function (r) { box.appendChild(buildRoom(r)); });
+    $("newroom").hidden = false;
+  }
+
+  function numField(labelText, value, onSave, id) {
+    var f = el("div", "field"), l = el("label", null, labelText), i = el("input", "num");
+    l.htmlFor = id; i.id = id; i.inputMode = "decimal"; i.placeholder = "cm"; i.value = showCm(value); i.autocomplete = "off";
+    i.addEventListener("change", function () {
+      var v = parseCm(i.value);
+      if (Number.isNaN(v)) { i.classList.add("bad"); onSave(undefined, "« " + i.value + " » n'est pas un nombre de centimètres."); return; }
+      i.classList.remove("bad"); onSave(v);
+    });
+    i.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); i.blur(); } });
+    f.appendChild(l); f.appendChild(i);
+    return f;
+  }
+
+  function buildRoom(r) {
+    var sec = el("section", "room"); sec.setAttribute("aria-label", r.name);
+    var head = el("div", "room-head");
+    head.appendChild(el("h2", null, r.name));
+    var ar = el("span", "area num", fmtArea(area(r))); head.appendChild(ar);
+    sec.appendChild(head);
+    var saved = el("div", "saved");
+
+    function saveRoom(field, v, err) {
+      if (v === undefined) { saved.textContent = err; return; }
+      r[field] = v; ar.textContent = fmtArea(area(r)); updateOverview();
+      saved.textContent = "Enregistrement…";
+      rpc("app_update_room", { p_code: CODE, p_id: r.id, p_name: r.name, p_length: r.length_cm, p_width: r.width_cm, p_height: r.height_cm })
+        .then(function () { saved.textContent = "Enregistré"; })
+        .catch(function () { saved.textContent = "L'enregistrement a échoué. Réessaie."; });
+    }
+    var dims = el("div", "dims");
+    dims.appendChild(numField("Longueur", r.length_cm, function (v, e) { saveRoom("length_cm", v, e); }, "rl-" + r.id));
+    dims.appendChild(numField("Largeur", r.width_cm, function (v, e) { saveRoom("width_cm", v, e); }, "rw-" + r.id));
+    dims.appendChild(numField("Hauteur plafond", r.height_cm, function (v, e) { saveRoom("height_cm", v, e); }, "rh-" + r.id));
+    sec.appendChild(dims);
+
+    var list = el("div", "mlist");
+    var ms = state.measures.filter(function (m) { return m.room_id === r.id; });
+    if (!ms.length) list.appendChild(el("p", "empty", "Aucun élément mesuré dans cette pièce."));
+    ms.forEach(function (m) { list.appendChild(buildMeasure(m, saved)); });
+    sec.appendChild(list);
+
+    // ajouter une mesure
+    var addLine = el("form", "add-line"); addLine.autocomplete = "off";
+    var af = el("div", "field"), al = el("label", null, "Nouvel élément à mesurer"), ai = el("input");
+    al.htmlFor = "add-" + r.id; ai.id = "add-" + r.id; ai.maxLength = 80; ai.placeholder = "Ex. : mur du canapé, fenêtre 2…";
+    af.appendChild(al); af.appendChild(ai);
+    var ab = el("button", "btn btn-ghost", "Ajouter"); ab.type = "submit";
+    addLine.appendChild(af); addLine.appendChild(ab);
+    addLine.addEventListener("submit", async function (ev) {
+      ev.preventDefault();
+      var name = ai.value.trim(); if (!name) { ai.focus(); return; }
+      ab.disabled = true;
+      try { await rpc("app_add_measures", { p_code: CODE, p_room: r.id, p_labels: [name] }); await refresh(); var x = $("add-" + r.id); if (x) x.focus(); }
+      catch (e) { saved.textContent = e.full ? "Trop de mesures enregistrées." : "L'ajout a échoué. Réessaie."; ab.disabled = false; }
+    });
+    sec.appendChild(addLine);
+
+    var acts = el("div", "room-actions");
+    var sugg = suggestionsFor(r, ms);
+    if (sugg.length) {
+      var sb = el("button", "linkbtn", "Ajouter les mesures conseillées (" + sugg.length + ")"); sb.type = "button";
+      sb.addEventListener("click", async function () {
+        sb.disabled = true;
+        try { await rpc("app_add_measures", { p_code: CODE, p_room: r.id, p_labels: sugg }); await refresh(); }
+        catch (e) { saved.textContent = "L'ajout a échoué. Réessaie."; sb.disabled = false; }
+      });
+      acts.appendChild(sb);
+    }
+    var rn = el("button", "linkbtn", "Renommer"); rn.type = "button";
+    rn.addEventListener("click", function () { renameRoom(r, head, saved); });
+    acts.appendChild(rn);
+    var key = "room-" + r.id;
+    var dl = el("button", "linkbtn" + (armed === key ? " armed" : ""), armed === key ? "Confirmer la suppression de la pièce" : "Supprimer la pièce"); dl.type = "button";
+    dl.addEventListener("click", function () { confirmThen(key, async function () { await rpc("app_delete_room", { p_code: CODE, p_id: r.id }); }); });
+    acts.appendChild(dl);
+    acts.appendChild(saved);
+    sec.appendChild(acts);
+    return sec;
+  }
+
+  function buildMeasure(m, saved) {
+    var row = el("div", "m");
+    var li = el("input", "m-label"); li.value = m.label; li.maxLength = 80; li.setAttribute("aria-label", "Élément mesuré");
+    row.appendChild(li);
+    var key = "m-" + m.id;
+    var del = el("button", "linkbtn" + (armed === key ? " armed" : ""), armed === key ? "Confirmer" : "Retirer"); del.type = "button";
+    del.setAttribute("aria-label", "Retirer « " + m.label + " »");
+    del.addEventListener("click", function () { confirmThen(key, async function () { await rpc("app_delete_measure", { p_code: CODE, p_id: m.id }); }); });
+    row.appendChild(del);
+
+    function save() {
+      saved.textContent = "Enregistrement…";
+      return rpc("app_update_measure", { p_code: CODE, p_id: m.id, p_label: m.label, p_width: m.width_cm, p_height: m.height_cm, p_depth: m.depth_cm, p_note: m.note || "" })
+        .then(function () { saved.textContent = "Enregistré"; updateOverview(); })
+        .catch(function () { saved.textContent = "L'enregistrement a échoué. Réessaie."; });
+    }
+    li.addEventListener("change", function () {
+      var v = li.value.trim();
+      if (!v) { li.value = m.label; return; }
+      m.label = v; save();
+    });
+    li.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); li.blur(); } });
+
+    var dims = el("div", "m-dims");
+    function setter(field) { return function (v, err) { if (v === undefined) { saved.textContent = err; return; } m[field] = v; save(); }; }
+    dims.appendChild(numField("Largeur", m.width_cm, setter("width_cm"), "mw-" + m.id));
+    dims.appendChild(numField("Hauteur", m.height_cm, setter("height_cm"), "mh-" + m.id));
+    dims.appendChild(numField("Profondeur", m.depth_cm, setter("depth_cm"), "md-" + m.id));
+    row.appendChild(dims);
+
+    var nf = el("div", "m-note"), ni = el("input");
+    ni.value = m.note || ""; ni.maxLength = 300; ni.placeholder = "Note : sens d'ouverture, position, hauteur du bas…"; ni.setAttribute("aria-label", "Note pour « " + m.label + " »");
+    ni.addEventListener("change", function () { m.note = ni.value.trim(); save(); });
+    ni.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); ni.blur(); } });
+    nf.appendChild(ni); row.appendChild(nf);
+    return row;
+  }
+
+  function suggestionsFor(r, ms) {
+    var n = norm(r.name), list = [];
+    if (/entree|hall|couloir/.test(n)) list = CHECKLIST.entree;
+    else if (/salon|sejour|living/.test(n)) list = CHECKLIST.salon.concat(CHECKLIST.common);
+    else if (/cuisine/.test(n)) list = CHECKLIST.cuisine.concat(CHECKLIST.common);
+    else if (/chambre/.test(n)) list = CHECKLIST.chambre.concat(CHECKLIST.common);
+    else if (/bain|sdb|douche/.test(n)) list = CHECKLIST.sdb.concat(CHECKLIST.common);
+    else list = CHECKLIST.common;
+    var have = ms.map(function (m) { return norm(m.label); });
+    return list.filter(function (l) { return have.indexOf(norm(l)) < 0; });
+  }
+
+  function renameRoom(r, head, saved) {
+    var h = head.querySelector("h2");
+    var i = el("input"); i.value = r.name; i.maxLength = 40; i.setAttribute("aria-label", "Nouveau nom de la pièce");
+    head.replaceChild(i, h); i.focus(); i.select();
+    var done = false;
+    async function finish(save) {
+      if (done) return; done = true;
+      var v = i.value.trim();
+      if (save && v && v !== r.name) {
+        r.name = v;
+        try { await rpc("app_update_room", { p_code: CODE, p_id: r.id, p_name: v, p_length: r.length_cm, p_width: r.width_cm, p_height: r.height_cm }); saved.textContent = "Enregistré"; }
+        catch (e) { saved.textContent = "Le renommage a échoué. Réessaie."; }
+      }
+      await refresh();
+    }
+    i.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); finish(true); } if (e.key === "Escape") finish(false); });
+    i.addEventListener("blur", function () { finish(true); });
+  }
+
+  function confirmThen(key, action) {
+    if (armed !== key) {
+      armed = key; clearTimeout(armTimer);
+      armTimer = setTimeout(function () { armed = null; render(); }, 4000);
+      render(); return;
+    }
+    armed = null; clearTimeout(armTimer);
+    action().then(function () { return refresh(); }).catch(function () { $("status").textContent = "La suppression a échoué. Réessaie."; render(); });
+  }
+
+  function updateOverview() {
+    var total = 0, filled = 0;
+    state.rooms.forEach(function (r) { var a = area(r); if (a) total += a; });
+    state.measures.forEach(function (m) { if (m.width_cm != null || m.height_cm != null || m.depth_cm != null) filled++; });
+    var ov = $("overview");
+    if (ov.children.length === 2) {
+      ov.children[0].textContent = state.rooms.length + " pièce" + (state.rooms.length > 1 ? "s" : "") + " · " + filled + " / " + state.measures.length + " mesures remplies";
+      ov.children[1].textContent = total ? "Surface ≈ " + String(Math.round(total * 10) / 10).replace(".", ",") + " m²" : "";
+    }
+  }
+
+  $("newroom").addEventListener("submit", async function (ev) {
+    ev.preventDefault();
+    var name = $("nr-name").value.trim(); if (!name) return;
+    $("nr-submit").disabled = true;
+    try { await rpc("app_add_room", { p_code: CODE, p_name: name }); $("nr-name").value = ""; $("nr-status").textContent = "Pièce ajoutée."; await refresh(); }
+    catch (e) { $("nr-status").textContent = e.full ? "Trop de pièces." : "L'ajout a échoué. Réessaie."; }
+    $("nr-submit").disabled = false;
+    setTimeout(function () { $("nr-status").textContent = ""; }, 2500);
+  });
+
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) refresh(true); });
+  pollTimer = setInterval(function () { if (!document.hidden) refresh(true); }, 15000);
+  refresh(false);
+})();
+</script>
+</body>
+</html>
