@@ -364,9 +364,9 @@ input:focus, select:focus { outline: none; border-bottom-color: var(--fg); }
     if (!(editing && a && a.closest && a.closest(".edit"))) renderList();
   }
 
-  /* ---------- edit price / quantity ---------- */
+  /* ---------- edit price / quantity / link ---------- */
   function startEdit(it) {
-    editing = { id: it.id, price: String(it.price).replace(".", ","), qty: String(it.qty), msg: "" };
+    editing = { id: it.id, price: String(it.price).replace(".", ","), qty: String(it.qty), link: it.link || "", msg: "" };
     renderList();
     var p = $("e-price"); if (p) { p.focus(); p.select(); }
   }
@@ -379,6 +379,9 @@ input:focus, select:focus { outline: none; border-bottom-color: var(--fg); }
     var f2 = el("div", "field"), l2 = el("label", null, "Quantité"), i2 = el("input", "num");
     l2.htmlFor = "e-qty"; i2.id = "e-qty"; i2.type = "number"; i2.inputMode = "numeric"; i2.min = "1"; i2.max = "999"; i2.step = "1"; i2.value = editing.qty;
     f2.appendChild(l2); f2.appendChild(i2);
+    var f3 = el("div", "field wide"), l3 = el("label", null, "Lien (vide = aucun lien)"), i3 = el("input");
+    l3.htmlFor = "e-link"; i3.id = "e-link"; i3.type = "url"; i3.inputMode = "url"; i3.placeholder = "https://"; i3.value = editing.link;
+    f3.appendChild(l3); f3.appendChild(i3);
     var tot = el("p", "line-total", "Total : "), tv = el("span", "num"); tot.appendChild(tv);
     var msg = el("p", "status", editing.msg || "");
     var bar = el("div", "actions");
@@ -386,7 +389,7 @@ input:focus, select:focus { outline: none; border-bottom-color: var(--fg); }
     var cancel = el("button", "btn btn-ghost", "Annuler"); cancel.type = "button";
     bar.appendChild(save); bar.appendChild(cancel);
     function upd() {
-      editing.price = i1.value; editing.qty = i2.value;
+      editing.price = i1.value; editing.qty = i2.value; editing.link = i3.value;
       var p = parsePrice(i1.value), q = parseQty(i2.value);
       tv.textContent = (isNaN(p) || isNaN(q)) ? "—" : (q > 1 ? q + " × " + money(p) + " = " : "") + money(Math.round(p * q * 100) / 100);
     }
@@ -394,9 +397,12 @@ input:focus, select:focus { outline: none; border-bottom-color: var(--fg); }
       var p = parsePrice(i1.value), q = parseQty(i2.value);
       if (isNaN(p)) { msg.textContent = "Le prix doit être un nombre, par exemple 149,99."; return; }
       if (isNaN(q)) { msg.textContent = "La quantité doit être un nombre entier entre 1 et 999."; return; }
+      var rawLink = i3.value.trim(), link = rawLink ? safeUrl(rawLink) : "";
+      if (rawLink && !link) { msg.textContent = "Le lien doit commencer par https://"; return; }
+      if (link && link.length > 1000) { msg.textContent = "Ce lien est trop long (1000 caractères maximum)."; return; }
       save.disabled = cancel.disabled = true; msg.textContent = "";
       try {
-        await rpc("app_update_item", { p_code: state.code, p_id: it.id, p_price: p, p_qty: q });
+        await rpc("app_update_item2", { p_code: state.code, p_id: it.id, p_price: p, p_qty: q, p_link: link || "" });
         editing = null;
         await refresh();
         renderList();
@@ -405,8 +411,8 @@ input:focus, select:focus { outline: none; border-bottom-color: var(--fg); }
         msg.textContent = "L'enregistrement a échoué. Réessaie dans un instant.";
       }
     }
-    i1.addEventListener("input", upd); i2.addEventListener("input", upd);
-    [i1, i2].forEach(function (i) {
+    i1.addEventListener("input", upd); i2.addEventListener("input", upd); i3.addEventListener("input", upd);
+    [i1, i2, i3].forEach(function (i) {
       i.addEventListener("keydown", function (e) {
         if (e.key === "Enter") { e.preventDefault(); doSave(); }
         if (e.key === "Escape") stopEdit();
@@ -415,7 +421,7 @@ input:focus, select:focus { outline: none; border-bottom-color: var(--fg); }
     save.addEventListener("click", doSave);
     cancel.addEventListener("click", stopEdit);
     var fields = el("div", "fields");
-    fields.appendChild(f1); fields.appendChild(f2);
+    fields.appendChild(f1); fields.appendChild(f2); fields.appendChild(f3);
     box.appendChild(fields); box.appendChild(tot); box.appendChild(bar); box.appendChild(msg);
     upd();
     return box;
